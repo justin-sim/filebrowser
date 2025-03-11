@@ -11,83 +11,90 @@ on:
           - dev
           - main
 jobs:
-  # build and release
-  build-and-release:
+  # build and run
+  build-and-run:
     runs-on: self-hosted
-    #needs: [lint, test]
-    #if: startsWith(github.event.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          
+      # Install build dependencies (make and other essentials)
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+        
       - uses: actions/setup-go@v5
         with:
           go-version: 1.23.0
+          
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: "frontend/package.json"
+          
       - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
           cache: "pnpm"
           cache-dependency-path: "frontend/pnpm-lock.yaml"
+          
       - name: Build frontend
         run: make build-frontend
-      - name: Login to Docker Hub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      # Extract metadata for Docker
-      - name: Extract metadata for Docker
-        id: meta
+          
+      # Set environment variables based on the selected environment
+      - name: Set environment variables
+        id: env-vars
         run: |
           DOCKER_IMAGE=filebrowser
-          VERSION=${GITHUB_REF#refs/tags/}
+          
+          # Use environment input instead of tag for versioning
+          if [[ "${{ github.event.inputs.environment }}" == "main" ]]; then
+            ENV_TAG="prod"
+          else
+            ENV_TAG="${{ github.event.inputs.environment }}"
+          fi
+          
+          # Set a timestamp-based version for better tracking
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          VERSION="${ENV_TAG}-${TIMESTAMP}"
+          
           echo "IMAGE_NAME=${DOCKER_IMAGE}" >> $GITHUB_ENV
           echo "IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
-      # Build and push Docker image
-      - name: Build and push Docker image
+          echo "ENV_TAG=${ENV_TAG}" >> $GITHUB_ENV
+      
+      # Build Docker image locally (no push)
+      - name: Build Docker image
         uses: docker/build-push-action@v2
         with:
           context: .
-          push: true
-          tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }},${{ env.IMAGE_NAME }}:latest
-  # Run container on self-hosted runner
-  run-container:
-    runs-on: self-hosted
-    needs: [build-and-release]
-    if: startsWith(github.event.ref, 'refs/tags/v')
-    steps:
-      - name: Set environment variables
-        run: |
-          DOCKER_IMAGE=filebrowser
-          VERSION=${GITHUB_REF#refs/tags/}
-          echo "IMAGE_NAME=${DOCKER_IMAGE}" >> $GITHUB_ENV
-          echo "IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
-      
-      - name: Pull latest image
-        run: docker pull ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          push: false
+          load: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_NAME }}:${{ env.ENV_TAG }}-latest
       
       - name: Stop and remove existing container
         run: |
-          docker stop filebrowser || true
-          docker rm filebrowser || true
+          docker stop filebrowser-${{ github.event.inputs.environment }} || true
+          docker rm filebrowser-${{ github.event.inputs.environment }} || true
       
       - name: Run Docker container locally
         run: |
-          # Run the Docker container with the specified format and volume mount to /app/uploads
+          # Create config directory if it doesn't exist
+          mkdir -p $(pwd)/config-${{ github.event.inputs.environment }}
+          
+          # Run the Docker container with environment-specific configuration
           docker run -d \
-            --name filebrowser \
+            --name filebrowser-${{ github.event.inputs.environment }} \
             --user $(id -u):$(id -g) \
             -p 8080:8080 \
-            -v /app/uploads:/data \
-            -v $(pwd)/config:/config \
+            -v /app/uploads-${{ github.event.inputs.environment }}:/data \
+            -v $(pwd)/config-${{ github.event.inputs.environment }}:/config \
             -e FB_BASEURL=/filebrowser \
+            -e ENVIRONMENT="${{ github.event.inputs.environment }}" \
             ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           
           # Verify container is running
           docker ps
           
-          # Optional: Show container logs
-          docker logs filebrowser
+          # Show container logs
+          docker logs filebrowser-${{ github.event.inputs.environment }}
