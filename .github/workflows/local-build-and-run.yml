@@ -96,21 +96,35 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/}
           echo "IMAGE_NAME=${DOCKER_IMAGE}" >> $GITHUB_ENV
           echo "IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
-      - name: Build Docker image
+  # Run container on self-hosted runner
+  run-container:
+    runs-on: self-hosted
+    needs: [build-and-release]
+    if: startsWith(github.event.ref, 'refs/tags/v')
+    steps:
+      - name: Set environment variables
         run: |
-          docker build -t ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} -t ${{ env.IMAGE_NAME }}:latest .
+          DOCKER_IMAGE=username/repo-name # Replace with your actual image name
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "IMAGE_NAME=${DOCKER_IMAGE}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
+      
+      - name: Pull latest image
+        run: docker pull ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+      
+      - name: Stop and remove existing container
+        run: |
+          docker stop filebrowser || true
+          docker rm filebrowser || true
+      
       - name: Run Docker container locally
         run: |
-          # Create required directories if they don't exist
-          mkdir -p ./data
-          mkdir -p ./config
-          
-          # Run the Docker container with the specified format
+          # Run the Docker container with the specified format and volume mount to /app/uploads
           docker run -d \
             --name filebrowser \
             --user $(id -u):$(id -g) \
             -p 8080:8080 \
-            -v $(pwd)/data:/data \
+            -v /app/uploads:/data \
             -v $(pwd)/config:/config \
             -e FB_BASEURL=/filebrowser \
             ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
