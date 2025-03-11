@@ -61,21 +61,17 @@ jobs:
           echo "IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
           echo "ENV_TAG=${ENV_TAG}" >> $GITHUB_ENV
       
-      # Build Docker image locally (no push)
+      # Build Docker image manually instead of using the action
       - name: Build Docker image
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          push: false
-          load: true
-          tags: |
-            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-            ${{ env.IMAGE_NAME }}:${{ env.ENV_TAG }}-latest
+        run: |
+          # Build the Docker image with tag
+          sudo docker build -t ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
+          sudo docker tag ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} ${{ env.IMAGE_NAME }}:${{ env.ENV_TAG }}-latest
       
       - name: Stop and remove existing container
         run: |
-          docker stop filebrowser-${{ github.event.inputs.environment }} || true
-          docker rm filebrowser-${{ github.event.inputs.environment }} || true
+          sudo docker stop filebrowser-${{ github.event.inputs.environment }} || true
+          sudo docker rm filebrowser-${{ github.event.inputs.environment }} || true
       
       - name: Run Docker container locally
         run: |
@@ -83,7 +79,7 @@ jobs:
           mkdir -p $(pwd)/config-${{ github.event.inputs.environment }}
           
           # Run the Docker container with environment-specific configuration
-          docker run -d \
+          sudo docker run -d \
             --name filebrowser-${{ github.event.inputs.environment }} \
             --user $(id -u):$(id -g) \
             -p 8080:8080 \
@@ -94,7 +90,7 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           
           # Verify container is running
-          docker ps
+          sudo docker ps
           
           # Show container logs
-          docker logs filebrowser-${{ github.event.inputs.environment }}
+          sudo docker logs filebrowser-${{ github.event.inputs.environment }}
