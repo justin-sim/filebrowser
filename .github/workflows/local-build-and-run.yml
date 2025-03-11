@@ -68,8 +68,8 @@ jobs:
     needs: [test-frontend, test-backend]
     steps:
       - run: echo "done"
-  # release
-  release:
+  # build and release
+  build-and-release:
     runs-on: ubuntu-latest
     needs: [lint, test]
     if: startsWith(github.event.ref, 'refs/tags/v')
@@ -95,14 +95,21 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      # Build Docker image locally
+      # Extract metadata for Docker
       - name: Extract metadata for Docker
         id: meta
         run: |
-          DOCKER_IMAGE=filebrowser:latest # Replace with your actual image name
+          DOCKER_IMAGE=filebrowser
           VERSION=${GITHUB_REF#refs/tags/}
           echo "IMAGE_NAME=${DOCKER_IMAGE}" >> $GITHUB_ENV
           echo "IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
+      # Build and push Docker image
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }},${{ env.IMAGE_NAME }}:latest
   # Run container on self-hosted runner
   run-container:
     runs-on: self-hosted
@@ -111,7 +118,7 @@ jobs:
     steps:
       - name: Set environment variables
         run: |
-          DOCKER_IMAGE=filebrowser:latest # Replace with your actual image name
+          DOCKER_IMAGE=filebrowser
           VERSION=${GITHUB_REF#refs/tags/}
           echo "IMAGE_NAME=${DOCKER_IMAGE}" >> $GITHUB_ENV
           echo "IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
