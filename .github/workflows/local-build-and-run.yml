@@ -92,7 +92,7 @@ jobs:
       - name: Extract metadata for Docker
         id: meta
         run: |
-          DOCKER_IMAGE=username/repo-name # Replace with your actual image name
+          DOCKER_IMAGE=filebrowser:latest # Replace with your actual image name
           VERSION=${GITHUB_REF#refs/tags/}
           echo "IMAGE_NAME=${DOCKER_IMAGE}" >> $GITHUB_ENV
           echo "IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
@@ -104,7 +104,7 @@ jobs:
     steps:
       - name: Set environment variables
         run: |
-          DOCKER_IMAGE=username/repo-name # Replace with your actual image name
+          DOCKER_IMAGE=filebrowser:latest # Replace with your actual image name
           VERSION=${GITHUB_REF#refs/tags/}
           echo "IMAGE_NAME=${DOCKER_IMAGE}" >> $GITHUB_ENV
           echo "IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
