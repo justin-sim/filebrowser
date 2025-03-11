@@ -1,5 +1,12 @@
 name: Local Build and Run
 on:
+  # Allow manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        default: 'latest'
   push:
     branches:
       - "master"
